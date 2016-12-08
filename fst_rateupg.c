@@ -281,14 +281,12 @@ static int fst_dup_connection_sta(const struct rate_upgrade_group *g,
 				  const char *iface, const u8* addr)
 {
 	int i;
-	struct multi_band_ie *mbie;
 	char *str_mbies = NULL;
 	int str_mbies_size;
 	int mbies_size;
 	u8 *mbies = NULL, *mbies_iter;
 
-	str_mbies_size = fst_get_peer_mbies(iface, addr,
-					    &str_mbies);
+	str_mbies_size = fst_get_peer_mbies(iface, addr, &str_mbies);
 	if (str_mbies_size < 2 || str_mbies_size & 1) {
 		fst_mgr_printf(MSG_INFO, "invalid mbies size %d",
 			       str_mbies_size);

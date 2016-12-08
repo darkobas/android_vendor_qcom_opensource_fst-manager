@@ -491,11 +491,10 @@ static int parse_peer_mbies(char *buf, void *data)
 	return os_strlen(buf);
 }
 
-int fst_get_peer_mbies(struct fst_iface_info *iface, const uint8_t *peer,
-		       char **mbies)
+int fst_get_peer_mbies(const char *ifname, const uint8_t *peer, char **mbies)
 {
 	return do_command(parse_peer_mbies, mbies, FST_CMD_GET_PEER_MBIES " %s "
-			  MACSTR, iface->name, MAC2STR(peer));
+			  MACSTR, ifname, MAC2STR(peer));
 }
 
 static int iface_parser(char *str, void *data)
