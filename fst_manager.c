@@ -454,12 +454,14 @@ static int _fst_mgr_peer_set_active_iface(struct fst_mgr_peer *p,
 
 	if (p->active_iface) {
 		const u8 *addr = _fst_mgr_peer_get_addr_of_iface(p, p->active_iface);
-		fst_mux_del_map_entry(drv, addr);
-		fst_mgr_printf(MSG_INFO,
-				"Map entry removed: " MACSTR " via %s",
-				MAC2STR(addr),
-				p->active_iface->info.name);
-		p->active_iface = NULL;
+		if (addr) {
+			fst_mux_del_map_entry(drv, addr);
+			fst_mgr_printf(MSG_INFO,
+				       "Map entry removed: " MACSTR " via %s",
+				       MAC2STR(addr),
+				       p->active_iface->info.name);
+			p->active_iface = NULL;
+		}
 	}
 
 	if (!i)

@@ -1016,7 +1016,7 @@ int fst_dedup_connection(const struct fst_iface_info *iface, const char *acl_fil
 
 int fst_disconnect_peer(const char *ifname, const u8 *peer_addr)
 {
-	int ret;
+	int ret = -1;
 
 	if (fst_is_supplicant()) {
 		fst_mgr_printf(MSG_INFO, "ifname=%s", ifname);
@@ -1030,7 +1030,7 @@ int fst_disconnect_peer(const char *ifname, const u8 *peer_addr)
 
 	if (ret < 0) {
 		fst_mgr_printf(MSG_ERROR, "failed to disconnect peer");
-		return -1;
+		return ret;
 	}
 
 	return 0;
