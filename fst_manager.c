@@ -41,6 +41,7 @@
 #include "fst_cfgmgr.h"
 #define FST_MGR_COMPONENT "MGR"
 #include "fst_manager.h"
+#include <stdbool.h>
 
 #define FST_LLT_SWITCH_IMMEDIATELY 0
 #define LLT_UNIT_US        32 /* See 10.32.2.2  Transitioning between states */
@@ -332,6 +333,78 @@ static int _fst_mgr_session_transfer(struct fst_mgr_session *s)
 	return 0;
 }
 
+static struct fst_mgr_peer *
+_fst_mgr_group_peer_by_session(struct fst_mgr_group *g,
+			       struct fst_mgr_session *s)
+{
+	struct fst_mgr_peer *p;
+
+	_fst_grp_foreach_peer(g, p)
+		if (p->session == s)
+			return p;
+
+	return NULL;
+}
+
+static int
+_fst_mgr_set_link_loss(const char *ifname, const u8 *addr, bool fst_link_loss)
+{
+	char fname[128];
+	FILE *f;
+
+	if (ifname == NULL)
+		return -1;
+
+	if (snprintf(fname, sizeof(fname), "/sys/class/net/%s/device/wil6210/fst_link_loss",
+		     ifname) < 0)
+		return -1;
+
+	f = fopen(fname, "r+");
+	if (!f) {
+		fst_mgr_printf(MSG_ERROR, "failed to open: %s", fname);
+		return -1;
+	}
+
+	if (fprintf(f, MACSTR " %d\n", MAC2STR(addr), fst_link_loss) < 0) {
+		fclose(f);
+		return -1;
+	}
+	fclose(f);
+
+	return 0;
+}
+
+static void
+_fst_mgr_session_set_link_loss(struct fst_mgr_session *s, bool fst_link_loss)
+{
+	int ret;
+	struct fst_mgr_peer *p = NULL;
+	struct fst_mgr_peer_iface *pi;
+
+	p = _fst_mgr_group_peer_by_session(s->group, s);
+	if (!p) {
+		fst_mgr_printf(MSG_WARNING, "couldn't find peer");
+		return;
+	}
+
+	_fst_peer_foreach_iface(p, pi) {
+		if (pi->iface == s->old_iface) {
+			ret = _fst_mgr_set_link_loss(s->old_iface->info.name,
+						     pi->addr, fst_link_loss);
+			if (ret < 0)
+				fst_mgr_printf(MSG_WARNING, "failed to set fst link loss %s",
+					       fst_link_loss ? "On" : "Off");
+			else
+				fst_mgr_printf(MSG_INFO, "fst link loss %s for peer "
+					       MACSTR " iface %s",
+					       fst_link_loss ? "enabled" : "disabled",
+					       MAC2STR(pi->addr),
+					       s->old_iface->info.name);
+			break;
+		}
+	}
+}
+
 static int _fst_mgr_session_respond(struct fst_mgr_session *s, Boolean accept)
 {
 	const char *responce_status =
@@ -346,6 +419,15 @@ static int _fst_mgr_session_respond(struct fst_mgr_session *s, Boolean accept)
 	s->state = accept ?
 			FST_MGR_SESSION_STATE_ESTABLISHED :
 			FST_MGR_SESSION_STATE_IDLE;
+
+	if (accept && s->llt > 0)
+		/*
+		 * at this point the active interface is the one with highest
+		 * priority and we have a backup interface. Set active interface
+		 * to aggressive link loss detection for fast switching to
+		 * backup once signal quality is low
+		 */
+		_fst_mgr_session_set_link_loss(s, true);
 	return 0;
 }
 
@@ -362,6 +444,14 @@ static void _fst_mgr_session_reset(struct fst_mgr_session *s,
 
 static void _fst_mgr_session_deinit(struct fst_mgr_session *s)
 {
+	if (s->llt > 0)
+		/*
+		 * at this point the active interface is the one with highest
+		 * priority but backup interface is no longer available.
+		 * Set active interface to default link loss behavior.
+		 */
+		_fst_mgr_session_set_link_loss(s, false);
+
 	dl_list_del(&s->grp_lentry);
 	fst_session_remove(s->id);
 	os_free(s);
@@ -454,12 +544,14 @@ static int _fst_mgr_peer_set_active_iface(struct fst_mgr_peer *p,
 
 	if (p->active_iface) {
 		const u8 *addr = _fst_mgr_peer_get_addr_of_iface(p, p->active_iface);
-		fst_mux_del_map_entry(drv, addr);
-		fst_mgr_printf(MSG_INFO,
-				"Map entry removed: " MACSTR " via %s",
-				MAC2STR(addr),
-				p->active_iface->info.name);
-		p->active_iface = NULL;
+		if (addr) {
+			fst_mux_del_map_entry(drv, addr);
+			fst_mgr_printf(MSG_INFO,
+				       "Map entry removed: " MACSTR " via %s",
+				       MAC2STR(addr),
+				       p->active_iface->info.name);
+			p->active_iface = NULL;
+		}
 	}
 
 	if (!i)
@@ -586,7 +678,7 @@ static void _fst_mgr_peer_check_compliance(struct fst_mgr_peer *p)
 
 	p->session->non_compliant = TRUE;
 	_fst_peer_foreach_iface(p, pi) {
-		if (fst_get_peer_mbies(&pi->iface->info,
+		if (fst_get_peer_mbies(pi->iface->info.name,
 			pi->addr, NULL) > 0) {
 			p->session->non_compliant = FALSE;
 			break;
@@ -793,7 +885,7 @@ static Boolean _fst_mgr_is_other_addr_in_mbies(struct fst_iface_info *info,
 	int mbies_size;
 	Boolean result = FALSE;
 
-	str_mbies_size = fst_get_peer_mbies(info, addr, &str_mbies);
+	str_mbies_size = fst_get_peer_mbies(info->name, addr, &str_mbies);
 	if (str_mbies_size < 2 || str_mbies_size & 1)
 		goto finish;
 
@@ -874,20 +966,6 @@ static Boolean _fst_mgr_is_peer_connected(struct fst_mgr_group *g,
 		}
 	}
 	return FALSE;
-}
-
-static struct fst_mgr_peer *
-_fst_mgr_group_peer_by_session(struct fst_mgr_group *g,
-		struct fst_mgr_session *s)
-{
-	struct fst_mgr_peer *p;
-
-	_fst_grp_foreach_peer(g, p) {
-		if (p->session == s)
-			return p;
-	}
-
-	return NULL;
 }
 
 static void _fst_mgr_group_deinit(struct fst_mgr_group *g)
@@ -1427,6 +1505,16 @@ static void _fst_mgr_ctrl_notification_cb_func(void *cb_ctx,
 			fst_mgr_printf(MSG_WARNING, "session %u: established (initiator)",
 					session_id);
 			s->state = FST_MGR_SESSION_STATE_ESTABLISHED;
+
+			if (s->llt > 0)
+				/*
+				 * at this point the active interface is the one
+				 * with highest priority and we have a backup
+				 * interface. Set active interface to aggressive
+				 * link loss detection for fast switching to
+				 * backup once signal quality is low.
+				 */
+				_fst_mgr_session_set_link_loss(s, true);
 		}
 		else
 			fst_mgr_printf(MSG_ERROR, "Cannot find session object");

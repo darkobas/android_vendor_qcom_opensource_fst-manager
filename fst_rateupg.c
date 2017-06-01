@@ -281,14 +281,12 @@ static int fst_dup_connection_sta(const struct rate_upgrade_group *g,
 				  const char *iface, const u8* addr)
 {
 	int i;
-	struct multi_band_ie *mbie;
 	char *str_mbies = NULL;
 	int str_mbies_size;
 	int mbies_size;
 	u8 *mbies = NULL, *mbies_iter;
 
-	str_mbies_size = fst_get_peer_mbies(iface, addr,
-					    &str_mbies);
+	str_mbies_size = fst_get_peer_mbies(iface, addr, &str_mbies);
 	if (str_mbies_size < 2 || str_mbies_size & 1) {
 		fst_mgr_printf(MSG_INFO, "invalid mbies size %d",
 			       str_mbies_size);
@@ -314,7 +312,6 @@ static int fst_dup_connection_sta(const struct rate_upgrade_group *g,
 		fst_mgr_printf(MSG_ERROR, "failed converting hex mbie to bin");
 		goto error_mbie;
 	}
-	os_free(str_mbies);
 
 	/* for each slave duplicate the addresses from all bands */
 	for (i = 0; i < g->slave_cnt; i++) {
@@ -340,6 +337,7 @@ static int fst_dup_connection_sta(const struct rate_upgrade_group *g,
 			mbies_size -= mbie->len + 2;
 		}
 	}
+	os_free(str_mbies);
 	os_free(mbies);
 	return 0;
 

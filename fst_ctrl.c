@@ -491,11 +491,10 @@ static int parse_peer_mbies(char *buf, void *data)
 	return os_strlen(buf);
 }
 
-int fst_get_peer_mbies(struct fst_iface_info *iface, const uint8_t *peer,
-		       char **mbies)
+int fst_get_peer_mbies(const char *ifname, const uint8_t *peer, char **mbies)
 {
 	return do_command(parse_peer_mbies, mbies, FST_CMD_GET_PEER_MBIES " %s "
-			  MACSTR, iface->name, MAC2STR(peer));
+			  MACSTR, ifname, MAC2STR(peer));
 }
 
 static int iface_parser(char *str, void *data)
@@ -1017,7 +1016,7 @@ int fst_dedup_connection(const struct fst_iface_info *iface, const char *acl_fil
 
 int fst_disconnect_peer(const char *ifname, const u8 *peer_addr)
 {
-	int ret;
+	int ret = -1;
 
 	if (fst_is_supplicant()) {
 		fst_mgr_printf(MSG_INFO, "ifname=%s", ifname);
@@ -1031,7 +1030,7 @@ int fst_disconnect_peer(const char *ifname, const u8 *peer_addr)
 
 	if (ret < 0) {
 		fst_mgr_printf(MSG_ERROR, "failed to disconnect peer");
-		return -1;
+		return ret;
 	}
 
 	return 0;

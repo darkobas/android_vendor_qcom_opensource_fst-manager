@@ -34,6 +34,7 @@
 #define __FST_MANAGER_H__
 
 #include "utils/common.h"
+#include "common/ieee802_11_defs.h"
 
 #ifndef FST_MGR_COMPONENT
 #error "FST_MGR_COMPONENT has to be defined"
