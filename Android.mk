@@ -29,8 +29,8 @@ OBJS += external/fst_ctrl_aux.c
 OBJS += external/inih/ini.c
 
 L_CFLAGS += -DCONFIG_CTRL_IFACE -DCONFIG_CTRL_IFACE_UNIX -DCONFIG_FST -DCONFIG_LIBNL20 -DANDROID
-L_CFLAGS += -DCONFIG_CTRL_IFACE_CLIENT_DIR=\"/data/misc/wifi/sockets\"
-L_CFLAGS += -DDEFAULT_HAPD_CLI_DIR=\"/data/misc/wifi/hostapd\"
+L_CFLAGS += -DCONFIG_CTRL_IFACE_CLIENT_DIR=\"/data/vendor/wifi/sockets\"
+L_CFLAGS += -DDEFAULT_HAPD_CLI_DIR=\"/data/vendor/wifi/hostapd\"
 L_CFLAGS += -DDEFAULT_WPAS_CLI_DIR=\"\"
 L_CFLAGS += -DCONFIG_ANDROID_LOG
 L_CFLAGS += -DANDROID_LOG_NAME=\"fstman\"
